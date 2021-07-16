@@ -1,0 +1,22 @@
+version: '3.4'
+
+services:
+  customer-microservice:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - MYSQL_SERVER=192.168.0.248
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=customer_microservice
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=VMware1!
+      - REDIS_CACHE_USE=true
+      - REDIS_CACHE_HOST=192.168.0.10
+      - REDIS_CACHE_PORT=6379
+      - REDIS_CACHE_PASSWORD=VMware1!
+    ports:
+      - "80"
+      - "443"
+    volumes:
+      - ~/.aspnet/https:/root/.aspnet/https:ro
+      - ~/.microsoft/usersecrets:/root/.microsoft/usersecrets:ro
