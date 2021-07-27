@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: customerservice-lb
+  labels:
+    run: customerservice-svc
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: customersvc
+spec:
+  selector:
+    app: customerservice-svc
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customerservice-svc
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: customerservice-svc
+  template:
+    metadata:
+      labels:
+        app: customerservice-svc
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: customermicroservice
+          image: silmaril212/customermicroservice:v1.4
+          imagePullPolicy: Always
+          env:
+            - name: MYSQL_SERVER
+              value: "192.168.0.248"
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_DATABASE
+              value: "customer_microservice"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: customerservice-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: customerservice-secrets
+                  key: MYSQL_PASSWORD
+            - name: REDIS_CACHE_HOST
+              value: "192.168.0.10"
+            - name: REDIS_CACHE_PORT
+              value: "6379"
+            - name: REDIS_CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: customerservice-secrets
+                  key: REDIS_CACHE_PASSWORD
+            - name: REDIS_CACHE_USE
+              value: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: customerservice-secrets
+type: kubernetes.io/basic-auth
+data:
+  username: "cm9vdA=="
+  MYSQL_PASSWORD: Vk13YXJlMSE=
+  MYSQL_USER: cm9vdA==
+  REDIS_CACHE_PASSWORD: Vk13YXJlMSE=

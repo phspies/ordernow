@@ -1,23 +1,23 @@
 {
   "$schema": "http://json.schemastore.org/launchsettings.json",
-  "profiles": {
-    "Custom": {
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:53601",
+      "sslPort": 0
+    }
+  },
+    "order_microservice": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:51795;http://localhost:10041",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    },
-    "customer_microservice": {
-      "commandName": "Project",
-      "launchUrl": "/swagger/index.html",
-      "applicationUrl": "http://localhost:5000",
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5001",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "MYSQL_SERVER": "192.168.0.248",
         "MYSQL_PORT": "3306",
-        "MYSQL_DATABASE": "customer_microservice",
+        "MYSQL_DATABASE": "order_microservice",
         "MYSQL_USER": "root",
         "MYSQL_PASSWORD": "VMware1!",
         "REDIS_CACHE_USE": "true",

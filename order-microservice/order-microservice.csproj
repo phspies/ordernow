@@ -2,32 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
-    <RootNamespace>customer_microservice</RootNamespace>
-    <DockerComposeProjectPath>../docker-compose.dcproj</DockerComposeProjectPath>
-    <UserSecretsId>6a0f18e2-060d-4772-8699-6441d343bd49</UserSecretsId>
+    <RootNamespace>order_microservice</RootNamespace>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(RunConfiguration)' == 'Custom' " />
-  <ItemGroup>
-    <None Remove="Confluent.Kafka" />
-    <None Remove="Microsoft.EntityFrameworkCore.Relational" />
-    <None Remove="Microsoft.EntityFrameworkCore.Design" />
-    <None Remove="Microsoft.EntityFrameworkCore" />
-    <None Remove="Pomelo.EntityFrameworkCore.MySql" />
-    <None Remove="Datamodels\" />
-    <None Remove="AspNetCore.RouteAnalyzer" />
-    <None Remove="Swashbuckle.AspNetCore" />
-    <None Remove="Utilities\" />
-    <None Remove="Confluent.Kafka.DependencyInjection" />
-    <None Remove="Confluent.SchemaRegistry.Serdes.Avro" />
-    <None Remove="Confluent.SchemaRegistry.Serdes" />
-    <None Remove="System.Text.Json" />
-    <None Remove="Migrations\" />
-  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="1.7.0" />
     <PackageReference Include="EasyCaching.Redis" Version="1.3.0" />
@@ -43,11 +20,20 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.4" />
     <PackageReference Include="Confluent.Kafka.DependencyInjection" Version="2.0.0" />
     <PackageReference Include="Confluent.SchemaRegistry.Serdes.Avro" Version="1.7.0" />
+    <PackageReference Include="Confluent.SchemaRegistry.Serdes" Version="1.3.0" />
     <PackageReference Include="System.Text.Json" Version="5.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Datamodels\" />
+    <None Remove="Utilities\" />
+    <None Remove="Confluent.Kafka.DependencyInjection" />
+    <None Remove="Confluent.SchemaRegistry.Serdes.Avro" />
+    <None Remove="Confluent.SchemaRegistry.Serdes" />
+    <None Remove="System.Text.Json" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Datamodels\" />
     <Folder Include="Utilities\" />
-    <Folder Include="Migrations\" />
   </ItemGroup>
 </Project>

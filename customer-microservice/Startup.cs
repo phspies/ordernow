@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using AspNetCore.RouteAnalyzer;
 using Confluent.Kafka;
+using Confluent.Kafka.DependencyInjection;
+using Confluent.SchemaRegistry.Serdes;
 using customer_microservice.Datamodels;
 using EasyCaching.Core.Configurations;
 using EFCoreSecondLevelCacheInterceptor;
@@ -11,8 +10,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +18,12 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 using MySqlConnector;
+using Confluent.Kafka.SyncOverAsync;
+using Confluent.SchemaRegistry;
+using System.ComponentModel.DataAnnotations;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace customer_microservice
 {
@@ -37,14 +40,35 @@ namespace customer_microservice
         public void ConfigureServices(IServiceCollection services)
         {
             using ILoggerFactory loggerFactory =
-                LoggerFactory.Create(builder =>
-                    builder.AddSimpleConsole(options =>
-                    {
-                        options.IncludeScopes = true;
-                        options.SingleLine = true;
-                        options.TimestampFormat = "hh:mm:ss ";
-                    }));
+            LoggerFactory.Create(builder =>
+                builder.AddSimpleConsole(options =>
+                {
+                    options.IncludeScopes = true;
+                    options.SingleLine = true;
+                    options.TimestampFormat = "hh:mm:ss ";
+            }));
+
             ILogger<Program> logger = loggerFactory.CreateLogger<Program>();
+
+            //if kafka is configured
+            var test = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP");
+            if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP"))) {
+                logger.LogInformation("KAFKA Details: {0}@{1}", Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP"), Environment.GetEnvironmentVariable("KAFKA_GROUP"));
+
+                services.AddKafkaClient(new Dictionary<string, string>
+                {
+                    { "bootstrap.servers", Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP") },
+                    { "enable.idempotence", Environment.GetEnvironmentVariable("KAFKA_IDEMPOTENCE") },
+                    { "group.id", Environment.GetEnvironmentVariable("KAFKA_GROUP") }
+                });
+                //services.AddSingleton(typeof(IAsyncSerializer<>), typeof(AvroSerializer<>));
+                services.AddSingleton<ISchemaRegistryClient>(sp =>
+                    new CachedSchemaRegistryClient(new SchemaRegistryConfig
+                    {
+                        Url = "localhost:8081"
+                    }));
+
+            }
 
             if (String.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYSQL_SERVER")) ||
                 String.IsNullOrEmpty(Environment.GetEnvironmentVariable("MYSQL_PORT")) ||
@@ -71,20 +95,10 @@ namespace customer_microservice
                 Password = Environment.GetEnvironmentVariable("MYSQL_PASSWORD"),
             };
 
-            //string mySqlConnectionStr = "server=192.168.0.248; port=3306; database=customer_microservice; user=root; password=VMware1!; Persist Security Info=False; Connect Timeout=300";
-            //services.AddDbContextPool<CustomerDBContext>(options => options.UseMySql(builder.ConnectionString, ServerVersion.AutoDetect(builder.ConnectionString)).
-            //    AddInterceptors(serviceProvider.GetRequiredService<SecondLevelCacheInterceptor>()));
-            //    services.AddEFSecondLevelCache(options =>
-            //    {
-            //        options.UseMemoryCacheProvider().DisableLogging(true);
-            //        options.CacheAllQueries(CacheExpirationMode.Sliding, TimeSpan.FromMinutes(30));
-            //    });
-
-
             bool useRedis;
             bool.TryParse(Environment.GetEnvironmentVariable("REDIS_CACHE_USE"), out useRedis);
 
-            services.AddDbContextPool<CustomerDBContext>((serviceProvider, optionsBuilder) =>
+            services.AddDbContextPool<DBContext>((serviceProvider, optionsBuilder) =>
                 optionsBuilder.UseMySql(builder.ConnectionString, ServerVersion.AutoDetect(builder.ConnectionString))
                     .AddInterceptors(serviceProvider.GetRequiredService<SecondLevelCacheInterceptor>()));
 
@@ -197,7 +211,7 @@ public void Configure(IHost host, IApplicationBuilder app, ILoggerFactory logger
                 var services = scope.ServiceProvider;
                 try
                 {
-                    var context = services.GetRequiredService<CustomerDBContext>();
+                    var context = services.GetRequiredService<DBContext>();
                     context.Database.EnsureCreated();
                     context.Database.Migrate();
                     //DbInitializer.Initialize(context);
@@ -208,6 +222,11 @@ public void Configure(IHost host, IApplicationBuilder app, ILoggerFactory logger
                     logger.LogError(ex, "An error occurred creating the DB.");
                 }
             }
+        }
+        public static class ApplicationLogging
+        {
+            public static ILoggerFactory LoggerFactory { get; } = new LoggerFactory();
+            public static ILogger CreateLogger<T>() => LoggerFactory.CreateLogger<T>();
         }
     }
 }
