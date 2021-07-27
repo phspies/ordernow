@@ -1,17 +1,18 @@
-﻿using customer_microservice.Datamodels;
+﻿using order_microservice.Datamodels;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace customer_microservice.Datamodels
-{ 
-    public class CustomerDBContext : DbContext
+namespace order_microservice.Datamodels
+{
+    public class OrderDBContext : DbContext
     {
+        public DbSet<OrderDataModel> Orders { get; set; }
         public DbSet<CustomerDataModel> Customers { get; set; }
 
-        public CustomerDBContext(DbContextOptions<CustomerDBContext> options) : base(options)
+        public OrderDBContext(DbContextOptions<OrderDBContext> options) : base(options)
         {
         }
 
@@ -41,8 +42,8 @@ namespace customer_microservice.Datamodels
             modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.CurrentAccountValue).HasColumnType("decimal(10,2)").IsRequired(false);
             modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.TotalBuyValue).HasColumnType("decimal(10,2)").IsRequired(false);
             modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.CurrentCreditValue).HasColumnType("decimal(10,2)").IsRequired(false);
-            modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.RowVersion).IsRowVersion();
-            modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.RowVersion).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+            modelBuilder.Entity<OrderDataModel>().Property(ug => ug.RowVersion).IsRowVersion();
+            modelBuilder.Entity<OrderDataModel>().Property(ug => ug.RowVersion).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
             modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.UpdateTimeStamp).ValueGeneratedOnAddOrUpdate();
             modelBuilder.Entity<CustomerDataModel>().Property(ug => ug.CreateTimeStamp).ValueGeneratedOnAdd();
 

@@ -2,36 +2,54 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Transactions;
+using Confluent.Kafka;
 using customer_microservice.Controllers;
 using customer_microservice.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
+using Newtonsoft.Json;
+using static customer_microservice.Startup;
 
 namespace customer_microservice.Datamodels
 {
-    public class CustomerDataAccess : IDisposable
+    public class CustomerDOA : IDisposable
     {
-        private CustomerDBContext customerDBContext;
-        private ILogger<CustomerController> logger;
+        private DBContext customerDBContext;
+        private ILogger logger;
+        IProducer<Null, string> kafkaProducer;
 
-        public CustomerDataAccess(CustomerDBContext context, ILogger<CustomerController> _logger)
+        public CustomerDOA(DBContext context, ILogger<CustomerDOA> _logger,  IProducer<Null, string> _producer)
         {
             customerDBContext = context;
             logger = _logger;
+            kafkaProducer = _producer;
+
         }
         public async Task<ActionResult<CustomerDataModel>> CreateAsync(CreateCustomerDataModel customer)
         {
             try
             {
                 CustomerDataModel privateCustomer = new CustomerDataModel();
+                AddressDataModel privateAddress = new AddressDataModel();
                 PropertyCopier<CreateCustomerDataModel, CustomerDataModel>.Copy(customer, privateCustomer);
+                PropertyCopier<CreateAddressDataModel, AddressDataModel>.Copy(customer.Address, privateAddress);
+
                 privateCustomer.Id = Guid.NewGuid();
+                privateAddress.Id = Guid.NewGuid();
+                await customerDBContext.Address.AddAsync(privateAddress);
+                privateCustomer.Address = privateAddress;
                 await customerDBContext.Customers.AddAsync(privateCustomer);
+                
                 await customerDBContext.SaveChangesAsync();
+                await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null,  string> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.create,CustomerID= privateCustomer.Id, Customer = privateCustomer }) });
+                await kafkaProducer.ProduceAsync("ordernow-address-events", new Message<Null, string> { Value = JsonConvert.SerializeObject(new AddressKafkaMessage() { Action = ActionEnum.create, AddressID = privateAddress.Id, Address = privateAddress }) });
+
+                kafkaProducer.Flush();
                 return privateCustomer;
             }
             catch (DbUpdateException mysqlex)
@@ -50,7 +68,7 @@ namespace customer_microservice.Datamodels
         {
             try
             {
-                return await customerDBContext.Customers.ToListAsync();
+                return await customerDBContext.Customers.Include(x => x.Address).ToListAsync();
             }
             catch (DbUpdateException mysqlex)
             {
@@ -67,7 +85,7 @@ namespace customer_microservice.Datamodels
         {
             try
             {
-                return await customerDBContext.Customers.FindAsync(id);
+                return await customerDBContext.Customers.Include(x => x.Address).FirstOrDefaultAsync(x => x.Id == id);
             }
             catch (DbUpdateException mysqlex)
             {
@@ -89,9 +107,10 @@ namespace customer_microservice.Datamodels
                     customerDBContext.Entry(await customerDBContext.Customers.FirstOrDefaultAsync(x => x.Id == id)).CurrentValues.SetValues(customer);
                     await customerDBContext.SaveChangesAsync();
                     transaction.Commit();
+                    await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null, string> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.update, CustomerID = id, Customer = await customerDBContext.Customers.FirstOrDefaultAsync(x => x.Id == id) }) });
+                    kafkaProducer.Flush();
                     return this.customerDBContext.Customers.Find(id);
                 }
-
             }
             catch (DbUpdateException mysqlex)
             {
@@ -110,6 +129,8 @@ namespace customer_microservice.Datamodels
             {
                 var customerItem = await customerDBContext.Customers.FindAsync(id);
                 customerDBContext.Customers.Remove(customerItem);
+                await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null, String> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.delete, CustomerID = id }) });
+                kafkaProducer.Flush();
                 return await customerDBContext.SaveChangesAsync();
             }
             catch (DbUpdateException mysqlex)
