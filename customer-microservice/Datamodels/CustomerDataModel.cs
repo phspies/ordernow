@@ -1,21 +1,19 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using customer_microservice.Kafka;
 using Newtonsoft.Json;
 
 namespace customer_microservice.Datamodels
 {
-
-
-
-
-    [JsonObject(MemberSerialization.OptIn)]
-    public class CustomerKafkaMessage
+    [JsonObject(MemberSerialization.OptIn, Title = "CustomerKafkaMessage")]
+    [MessageTopic("ordernow-customer-events")]
+    public class CustomerKafkaMessage : IMessage
     {
         [JsonProperty("action")]
         public ActionEnum Action { get; set; }
         [JsonProperty("id")]
         public Guid CustomerID { get; set; }
-        [JsonProperty("customer")]
+        [JsonProperty("customer_data_model")]
         public CustomerDataModel Customer { get; set; }
     }
     [JsonObject(MemberSerialization.OptIn)]
@@ -46,15 +44,21 @@ namespace customer_microservice.Datamodels
     }
     public class UpdateCustomerDataModel
     {
+        [JsonProperty("firstname")]
         public string FirstName { get; set; }
+        [JsonProperty("lastname")]
         public string LastName { get; set; }
         [Timestamp]
+        [JsonProperty("row_version")]
         public byte[] RowVersion { get; set; }
     }
     public class CreateCustomerDataModel
     {
+        [JsonProperty("firstname")]
         public string FirstName { get; set; }
+        [JsonProperty("lastname")]
         public string LastName { get; set; }
+        [JsonProperty("address")]
         public CreateAddressDataModel Address { get; set; }
     }
 }

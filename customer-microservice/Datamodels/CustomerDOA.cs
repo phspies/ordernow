@@ -2,18 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Transactions;
-using Confluent.Kafka;
-using customer_microservice.Controllers;
+using customer_microservice.Kafka;
 using customer_microservice.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MySqlConnector;
-using Newtonsoft.Json;
-using static customer_microservice.Startup;
 
 namespace customer_microservice.Datamodels
 {
@@ -21,13 +16,15 @@ namespace customer_microservice.Datamodels
     {
         private DBContext customerDBContext;
         private ILogger logger;
-        IProducer<Null, string> kafkaProducer;
+        IMessageProducer kafkaProducer;
+        CancellationToken stoppingToken;
 
-        public CustomerDOA(DBContext context, ILogger<CustomerDOA> _logger,  IProducer<Null, string> _producer)
+        public CustomerDOA(DBContext context, ILogger<CustomerDOA> _logger, IMessageProducer _producer, CancellationToken _stoppingToken)
         {
             customerDBContext = context;
             logger = _logger;
             kafkaProducer = _producer;
+            stoppingToken = _stoppingToken;
 
         }
         public async Task<ActionResult<CustomerDataModel>> CreateAsync(CreateCustomerDataModel customer)
@@ -46,10 +43,25 @@ namespace customer_microservice.Datamodels
                 await customerDBContext.Customers.AddAsync(privateCustomer);
                 
                 await customerDBContext.SaveChangesAsync();
-                await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null,  string> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.create,CustomerID= privateCustomer.Id, Customer = privateCustomer }) });
-                await kafkaProducer.ProduceAsync("ordernow-address-events", new Message<Null, string> { Value = JsonConvert.SerializeObject(new AddressKafkaMessage() { Action = ActionEnum.create, AddressID = privateAddress.Id, Address = privateAddress }) });
 
-                kafkaProducer.Flush();
+                var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.create, CustomerID = privateCustomer.Id, Customer = privateCustomer });
+                var addressMessage = new AddressMessage(new AddressKafkaMessage() { Action = ActionEnum.create, AddressID = privateAddress.Id, Address = privateAddress });
+                var count = 0;
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
+                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
+                    await Task.Delay(1000, stoppingToken);
+                    count++;
+                }
+                count = 0;
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    await kafkaProducer.ProduceAsync(null, addressMessage, stoppingToken);
+                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
+                    await Task.Delay(1000, stoppingToken);
+                    count++;
+                }
                 return privateCustomer;
             }
             catch (DbUpdateException mysqlex)
@@ -107,9 +119,17 @@ namespace customer_microservice.Datamodels
                     customerDBContext.Entry(await customerDBContext.Customers.FirstOrDefaultAsync(x => x.Id == id)).CurrentValues.SetValues(customer);
                     await customerDBContext.SaveChangesAsync();
                     transaction.Commit();
-                    await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null, string> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.update, CustomerID = id, Customer = await customerDBContext.Customers.FirstOrDefaultAsync(x => x.Id == id) }) });
-                    kafkaProducer.Flush();
-                    return this.customerDBContext.Customers.Find(id);
+                    var updatedCustomer = this.customerDBContext.Customers.Find(id);
+                    var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.update, CustomerID = id, Customer = updatedCustomer });
+                    var count = 0;
+                    while (!stoppingToken.IsCancellationRequested)
+                    {
+                        await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
+                        logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
+                        await Task.Delay(1000, stoppingToken);
+                        count++;
+                    }
+                    return updatedCustomer;
                 }
             }
             catch (DbUpdateException mysqlex)
@@ -129,8 +149,15 @@ namespace customer_microservice.Datamodels
             {
                 var customerItem = await customerDBContext.Customers.FindAsync(id);
                 customerDBContext.Customers.Remove(customerItem);
-                await kafkaProducer.ProduceAsync("ordernow-customer-events", new Message<Null, String> { Value = JsonConvert.SerializeObject(new CustomerKafkaMessage() { Action = ActionEnum.delete, CustomerID = id }) });
-                kafkaProducer.Flush();
+                var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.delete, CustomerID = id });
+                var count = 0;
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
+                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
+                    await Task.Delay(1000, stoppingToken);
+                    count++;
+                }
                 return await customerDBContext.SaveChangesAsync();
             }
             catch (DbUpdateException mysqlex)

@@ -7,7 +7,7 @@ namespace customer_microservice.Datamodels
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class FoundationDataModel
     {
-        [JsonProperty("id_timestamp")]
+        [JsonProperty("id")]
         public Guid Id { get; set; }
         [JsonProperty("create_timestamp")]
         public DateTime CreateTimeStamp { get; set; }

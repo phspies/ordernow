@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using customer_microservice.Datamodels;
+using customer_microservice.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,22 +21,24 @@ namespace customer_microservice.Controllers
         private DBContext customerDBContext;
         private ILogger<CustomerController> CustomerControllerlogger;
         private ILogger<CustomerDOA> CustomerDOAlogger;
-        IProducer<Null, string> kafkaProducer;
+        private IMessageProducer kafkaProducer;
+        private CancellationToken stoppingToken;
 
 
-        public CustomerController(DBContext context, ILogger<CustomerDOA> _doalogger, ILogger<CustomerController> _controllerlogger, IProducer<Null, string> _producer)
+        public CustomerController(DBContext context, ILogger<CustomerDOA> _doalogger, ILogger<CustomerController> _controllerlogger, IMessageProducer messageProducer, CancellationToken _stoppingToken)
         {
             customerDBContext = context;
             CustomerDOAlogger = _doalogger;
             CustomerControllerlogger = _controllerlogger;
-            kafkaProducer = _producer;
+            kafkaProducer = messageProducer;
+            stoppingToken = _stoppingToken;
         }
 
         // GET: api/customers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CustomerDataModel>>> List()
         {
-            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer))
+            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer, stoppingToken))
             {
                 CustomerControllerlogger.LogInformation("Retrieving all customers API");
                 return await db.GetListAsync();
@@ -44,7 +48,7 @@ namespace customer_microservice.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<CustomerDataModel>> Get(Guid id)
         {
-            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer))
+            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer, stoppingToken))
             {
                 CustomerControllerlogger.LogInformation($"Retrieving customer API: {id}");
                 return await db.GetAsync(id);
@@ -54,7 +58,7 @@ namespace customer_microservice.Controllers
         [HttpPost]
         public async Task<ActionResult<CustomerDataModel>> Create(CreateCustomerDataModel customer)
         {
-            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer))
+            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer, stoppingToken))
             {
                 CustomerControllerlogger.LogInformation($"Creating customer API: {JsonSerializer.Serialize(customer)}");
                 return await db.CreateAsync(customer);
@@ -65,17 +69,9 @@ namespace customer_microservice.Controllers
         public async Task<ActionResult<CustomerDataModel>> Update(Guid id, UpdateCustomerDataModel customer)
         {
             CustomerControllerlogger.LogInformation($"Update customer API: {id}:{JsonSerializer.Serialize(customer)}");
-            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer))
+            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer, stoppingToken))
             {
-                if (id == Guid.Empty)
-                {
-                    return BadRequest();
-                }
-                if (!CustomerExists(id))
-                {
-                    return NotFound();
-                }
-                return await db.UpdateAsync(id, customer);
+                return id == Guid.Empty ? BadRequest() : !CustomerExists(id) ? NotFound() : await db.UpdateAsync(id, customer);
             }
         }
         // DELETE: api/customer/xxxx-xxxx-xxxx-xxxx
@@ -83,19 +79,19 @@ namespace customer_microservice.Controllers
         public async Task<ActionResult> Delete(Guid id)
         {
 
-            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer))
+            using (var db = new CustomerDOA(customerDBContext, CustomerDOAlogger, kafkaProducer, stoppingToken))
             {
                 CustomerControllerlogger.LogInformation($"Delete customer API: {id}");
-                if (id == Guid.Empty)
+                if (id != Guid.Empty)
                 {
-                    return BadRequest();
+                    if (!CustomerExists(id))
+                    {
+                        return NotFound();
+                    }
+                    await db.DeleteAsync(id);
+                    return Ok();
                 }
-                if (!CustomerExists(id))
-                {
-                    return NotFound();
-                }
-                await db.DeleteAsync(id);
-                return Ok();
+                return BadRequest();
             }
         }
 

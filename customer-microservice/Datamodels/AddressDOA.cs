@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
+using customer_microservice.Kafka;
 using customer_microservice.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,14 +19,15 @@ namespace customer_microservice.Datamodels
     {
         private DBContext addressDBContext;
         private ILogger logger;
-        IProducer<Null, string> kafkaProducer;
+        IMessageProducer kafkaProducer;
+        CancellationToken stoppingToken;
 
-        public AddressDOA(DBContext context, ILogger<AddressDOA> _logger,  IProducer<Null, string> _producer)
+        public AddressDOA(DBContext context, ILogger<AddressDOA> _logger, IMessageProducer _producer, CancellationToken _stoppingToken)
         {
             addressDBContext = context;
             logger = _logger;
             kafkaProducer = _producer;
-
+            stoppingToken = _stoppingToken;
         }
         public async Task<ActionResult<AddressDataModel>> CreateAsync(CreateAddressDataModel address)
         {
@@ -35,16 +38,16 @@ namespace customer_microservice.Datamodels
                 privateAddress.Id = Guid.NewGuid();
                 await addressDBContext.Address.AddAsync(privateAddress);
                 await addressDBContext.SaveChangesAsync();
-                await kafkaProducer.ProduceAsync("ordernow-address-events",
-                    new Message<Null, string> {
-                        Value = JsonConvert.SerializeObject(
-                            new AddressKafkaMessage() {
-                                Action = ActionEnum.create,
-                                AddressID = privateAddress.Id,
-                                Address = privateAddress
-                            }
-                            )
-                    });
+
+                var customerMessage = new AddressMessage(new AddressKafkaMessage() { Action = ActionEnum.create, Address = privateAddress });
+                var count = 0;
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    await kafkaProducer.ProduceAsync(null, new AddressKafkaMessage() { Action = ActionEnum.update, AddressID = privateAddress.Id, Address = privateAddress }, stoppingToken);
+                    logger.LogInformation($"Address Kafka running at: {DateTimeOffset.Now} - {count}");
+                    await Task.Delay(1000, stoppingToken);
+                    count++;
+                }
                 return privateAddress;
             }
             catch (DbUpdateException mysqlex)
@@ -101,7 +104,7 @@ namespace customer_microservice.Datamodels
                     addressDBContext.Entry(await addressDBContext.Address.FirstOrDefaultAsync(x => x.Id == id)).CurrentValues.SetValues(address);
                     await addressDBContext.SaveChangesAsync();
                     transaction.Commit();
-                    await kafkaProducer.ProduceAsync("ordernow-address-events", new Message<Null, string> { Value = JsonConvert.SerializeObject(new AddressKafkaMessage() { Action = ActionEnum.update, AddressID = id, Address = await addressDBContext.Address.FirstOrDefaultAsync(x => x.Id == id) }) });
+                    await kafkaProducer.ProduceAsync(null, new AddressKafkaMessage() { Action = ActionEnum.update, AddressID = id, Address = await addressDBContext.Address.FirstOrDefaultAsync(x => x.Id == id) }, stoppingToken);
                     return this.addressDBContext.Address.Find(id);
                 }
 
@@ -122,7 +125,7 @@ namespace customer_microservice.Datamodels
             try
             {
                 var addressItem = await addressDBContext.Address.FindAsync(id);
-                await kafkaProducer.ProduceAsync("ordernow-address-events", new Message<Null, String> { Value = JsonConvert.SerializeObject(new AddressKafkaMessage() { Action = ActionEnum.delete, AddressID = id }) });
+                await kafkaProducer.ProduceAsync(null, new AddressKafkaMessage() { Action = ActionEnum.update, AddressID = id }, stoppingToken);
                 addressDBContext.Address.Remove(addressItem);
                 return await addressDBContext.SaveChangesAsync();
             }
