@@ -6,14 +6,14 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
-using customer_microservice.Kafka;
-using customer_microservice.Utilities;
+using order_microservice.Kafka;
+using order_microservice.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace customer_microservice.Datamodels
+namespace order_microservice.Datamodels
 {
     public class AddressDOA : IDisposable
     {
@@ -105,7 +105,7 @@ namespace customer_microservice.Datamodels
                     await addressDBContext.SaveChangesAsync();
                     transaction.Commit();
                     await kafkaProducer.ProduceAsync(null, new AddressKafkaMessage() { Action = ActionEnum.update, AddressID = id, Address = await addressDBContext.Address.FirstOrDefaultAsync(x => x.Id == id) }, stoppingToken);
-                    return this.addressDBContext.Address.Find(id);
+                    return await this.addressDBContext.Address.FindAsync(id);
                 }
 
             }
@@ -156,8 +156,10 @@ namespace customer_microservice.Datamodels
             }
             return privateAddressObject;
         }
-        public bool AddressExists(Guid id) => this.addressDBContext.Address.Any(e => e.Id == id);
-        public async Task SubmitKafkaMessageAsync(AddressMessage addressMessage)
+
+        private bool AddressExists(Guid id) => this.addressDBContext.Address.Any(e => e.Id == id);
+
+        private async Task SubmitKafkaMessageAsync(AddressMessage addressMessage)
         {
             int count = 0;
             string kafkaResult = "";
@@ -166,14 +168,14 @@ namespace customer_microservice.Datamodels
                 count++;
                 try
                 {
-                    logger.LogInformation($"Address Kafka running at: {DateTimeOffset.Now} - {count}");
+                    logger.LogInformation($"Address Kafka message submit at: {DateTimeOffset.Now} - {count}");
                     kafkaResult = await kafkaProducer.ProduceAsync(null, addressMessage, stoppingToken);
-                    logger.LogInformation($"Address Kafka running ran: {DateTimeOffset.Now} - {kafkaResult}");
+                    logger.LogInformation($"Address Kafka message submited at: {DateTimeOffset.Now} - {kafkaResult}");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError($"Address Kafka running failed: {DateTimeOffset.Now} - {ex.Message} - {kafkaResult}");
+                    logger.LogError($"Address Kafka message failed: {DateTimeOffset.Now} - {ex.Message} - {kafkaResult}");
                     await Task.Delay(1000, stoppingToken);
                 }
                 if (count > 100)

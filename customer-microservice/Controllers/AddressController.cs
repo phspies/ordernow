@@ -23,7 +23,7 @@ namespace address_microservice.Controllers
         private ILogger<AddressController> AddressControllerlogger;
         private ILogger<AddressDOA> AddressDOAlogger;
         IMessageProducer kafkaProducer;
-        HttpRequest httpRequest; 
+        //HttpRequest httpRequest; 
 
 
         public AddressController(DBContext context, ILogger<AddressDOA> _doalogger, ILogger<AddressController> _controllerlogger, IMessageProducer _producer)
@@ -32,7 +32,7 @@ namespace address_microservice.Controllers
             AddressDOAlogger = _doalogger;
             AddressControllerlogger = _controllerlogger;
             kafkaProducer = _producer;
-            httpRequest = HttpContext.Request;
+// httpRequest = HttpContext.Request;
         }
 
         // GET: api/addresss

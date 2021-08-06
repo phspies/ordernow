@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
-using customer_microservice.Datamodels;
+using order_microservice.Datamodels;
 using Newtonsoft.Json;
 
-namespace customer_microservice.Kafka
+namespace order_microservice.Kafka
 {
     public class KafkaMessageProducer : IMessageProducer, IDisposable
     {

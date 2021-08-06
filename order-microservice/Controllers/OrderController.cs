@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using order_microservice.Datamodels;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace order_microservice.Controllers
@@ -15,10 +13,10 @@ namespace order_microservice.Controllers
     [ApiController]
     public class OrderController : ControllerBase
     {
-        private OrderDBContext OrderDBContext;
+        private DBContext OrderDBContext;
         private ILogger<OrderController> logger;
 
-        public OrderController(OrderDBContext context, ILogger<OrderController> _logger)
+        public OrderController(DBContext context, ILogger<OrderController> _logger)
         {
             OrderDBContext = context;
             logger = _logger;

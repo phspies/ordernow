@@ -4,28 +4,29 @@
     "Custom": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:51795;http://localhost:10041",
+      "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "customer_microservice": {
       "commandName": "Project",
+      "launchBrowser": true,
       "launchUrl": "/swagger/index.html",
       "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "MYSQL_SERVER": "192.168.0.248",
-        "MYSQL_PORT": "3306",
-        "MYSQL_DATABASE": "customer_microservice",
+        "MYSQL_SERVER": "192.168.0.100",
+        "MYSQL_PORT": "32611",
+        "MYSQL_DATABASE": "order_microservice",
         "MYSQL_USER": "root",
-        "MYSQL_PASSWORD": "VMware1!",
+        "MYSQL_PASSWORD": "VMwar3!!",
         "REDIS_CACHE_USE": "true",
-        "REDIS_CACHE_HOST": "192.168.0.10",
-        "REDIS_CACHE_PORT": "6379",
+        "REDIS_CACHE_HOST": "192.168.0.100",
+        "REDIS_CACHE_PORT": "31604",
         "REDIS_CACHE_PASSWORD": "VMware1!",
-        "KAFKA_BOOTSTRAP": "192.168.0.248:9092",
-        "KAFKA_GROUP": "group1",
+        "KAFKA_BOOTSTRAP": "192.168.0.100:30000",
+        "KAFKA_GROUP": "ordernow",
         "KAFKA_IDEMPOTENCE": "true"
       }
     }

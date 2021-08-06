@@ -15,13 +15,15 @@ namespace customer_microservice
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .ConfigureLogging(loggingBuilder =>
+
+                .ConfigureLogging(builder =>
+                builder.AddConsole().AddDebug().AddSimpleConsole(options =>
                 {
-                    loggingBuilder.ClearProviders();
-                    loggingBuilder
-                        .AddDebug()
-                        .AddConsole();
-                })
+                    options.IncludeScopes = true;
+                    options.SingleLine = true;
+                    options.TimestampFormat = "dd/MM/yyyy HH:mm:ss.ffff ";
+                }))
+
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();

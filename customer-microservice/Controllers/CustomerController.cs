@@ -25,7 +25,7 @@ namespace customer_microservice.Controllers
         private CancellationToken stoppingToken;
 
 
-        public CustomerController(DBContext context, ILogger<CustomerDOA> _doalogger, ILogger<CustomerController> _controllerlogger, IMessageProducer messageProducer, CancellationToken _stoppingToken)
+        public CustomerController(DBContext context, ILogger<CustomerDOA> _doalogger, ILogger<CustomerController> _controllerlogger, IMessageProducer messageProducer, CancellationToken _stoppingToken = default)
         {
             customerDBContext = context;
             CustomerDOAlogger = _doalogger;

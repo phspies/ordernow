@@ -15,10 +15,10 @@ namespace order_microservice.Datamodels
 {
     public class OrderDataAccess : IDisposable
     {
-        private OrderDBContext orderDBContext;
+        private DBContext orderDBContext;
         private ILogger<OrderController> logger;
 
-        public OrderDataAccess(OrderDBContext context, ILogger<OrderController> _logger)
+        public OrderDataAccess(DBContext context, ILogger<OrderController> _logger)
         {
             orderDBContext = context;
             logger = _logger;

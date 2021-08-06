@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Confluent.Kafka;
 using customer_microservice.Kafka;
 using customer_microservice.Utilities;
 using Microsoft.AspNetCore.Mvc;
@@ -31,38 +32,25 @@ namespace customer_microservice.Datamodels
         {
             try
             {
-                CustomerDataModel privateCustomer = new CustomerDataModel();
-                AddressDataModel privateAddress = new AddressDataModel();
-                PropertyCopier<CreateCustomerDataModel, CustomerDataModel>.Copy(customer, privateCustomer);
-                PropertyCopier<CreateAddressDataModel, AddressDataModel>.Copy(customer.Address, privateAddress);
-
-                privateCustomer.Id = Guid.NewGuid();
-                privateAddress.Id = Guid.NewGuid();
-                await customerDBContext.Address.AddAsync(privateAddress);
-                privateCustomer.Address = privateAddress;
-                await customerDBContext.Customers.AddAsync(privateCustomer);
-                
-                await customerDBContext.SaveChangesAsync();
-
-                var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.create, CustomerID = privateCustomer.Id, Customer = privateCustomer });
-                var addressMessage = new AddressMessage(new AddressKafkaMessage() { Action = ActionEnum.create, AddressID = privateAddress.Id, Address = privateAddress });
-                var count = 0;
-                while (!stoppingToken.IsCancellationRequested)
+                using (var transaction = customerDBContext.Database.BeginTransaction())
                 {
-                    await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
-                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
-                    await Task.Delay(1000, stoppingToken);
-                    count++;
+                    CustomerDataModel privateCustomer = new CustomerDataModel();
+                    AddressDataModel privateAddress = new AddressDataModel();
+                    PropertyCopier<CreateCustomerDataModel, CustomerDataModel>.Copy(customer, privateCustomer);
+                    PropertyCopier<CreateAddressDataModel, AddressDataModel>.Copy(customer.Address, privateAddress);
+
+                    privateCustomer.Id = Guid.NewGuid();
+                    privateAddress.Id = Guid.NewGuid();
+                    await customerDBContext.Address.AddAsync(privateAddress);
+                    privateCustomer.Address = privateAddress;
+                    await customerDBContext.Customers.AddAsync(privateCustomer);
+                    var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.create, CustomerID = privateCustomer.Id, Customer = privateCustomer });
+                    var addressMessage = new AddressMessage(new AddressKafkaMessage() { Action = ActionEnum.create, AddressID = privateAddress.Id, Address = privateAddress });
+                    await SubmitKafkaMessageAsync(customerMessage);
+
+                    transaction.Commit();
+                    return privateCustomer;
                 }
-                count = 0;
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    await kafkaProducer.ProduceAsync(null, addressMessage, stoppingToken);
-                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
-                    await Task.Delay(1000, stoppingToken);
-                    count++;
-                }
-                return privateCustomer;
             }
             catch (DbUpdateException mysqlex)
             {
@@ -118,17 +106,10 @@ namespace customer_microservice.Datamodels
                 {
                     customerDBContext.Entry(await customerDBContext.Customers.FirstOrDefaultAsync(x => x.Id == id)).CurrentValues.SetValues(customer);
                     await customerDBContext.SaveChangesAsync();
-                    transaction.Commit();
                     var updatedCustomer = this.customerDBContext.Customers.Find(id);
                     var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.update, CustomerID = id, Customer = updatedCustomer });
-                    var count = 0;
-                    while (!stoppingToken.IsCancellationRequested)
-                    {
-                        await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
-                        logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
-                        await Task.Delay(1000, stoppingToken);
-                        count++;
-                    }
+                    await SubmitKafkaMessageAsync(customerMessage);
+                    transaction.Commit();
                     return updatedCustomer;
                 }
             }
@@ -145,31 +126,29 @@ namespace customer_microservice.Datamodels
         }
         public async Task<int> DeleteAsync(Guid id)
         {
-            try
+            using (var transaction = customerDBContext.Database.BeginTransaction())
             {
+                try { 
                 var customerItem = await customerDBContext.Customers.FindAsync(id);
                 customerDBContext.Customers.Remove(customerItem);
                 var customerMessage = new CustomerMessage(new CustomerKafkaMessage() { Action = ActionEnum.delete, CustomerID = id });
-                var count = 0;
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
-                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
-                    await Task.Delay(1000, stoppingToken);
-                    count++;
+                await SubmitKafkaMessageAsync(customerMessage);
+                transaction.Commit();
                 }
-                return await customerDBContext.SaveChangesAsync();
+                catch (DbUpdateException mysqlex)
+                {
+                    await transaction.RollbackAsync();
+                    logger.LogError(mysqlex.InnerException.Message);
+                    throw new InvalidOperationException(mysqlex.InnerException.Message);
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logger.LogError(ex.Message);
+                    throw;
+                }
             }
-            catch (DbUpdateException mysqlex)
-            {
-                logger.LogError(mysqlex.InnerException.Message);
-                throw new InvalidOperationException(mysqlex.InnerException.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex.Message);
-                throw;
-            }
+            return await customerDBContext.SaveChangesAsync();
         }
 
 
@@ -188,6 +167,32 @@ namespace customer_microservice.Datamodels
             return privateCustomerObject;
         }
         public bool CustomerExists(Guid id) => this.customerDBContext.Customers.Any(e => e.Id == id);
+
+        public async Task SubmitKafkaMessageAsync(CustomerMessage customerMessage)
+        {
+            int count = 0;
+            string kafkaResult = "";
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                count++;
+                try
+                {
+                    logger.LogInformation($"Customer Kafka running at: {DateTimeOffset.Now} - {count}");
+                    kafkaResult = await kafkaProducer.ProduceAsync(null, customerMessage, stoppingToken);
+                    logger.LogInformation($"Customer Kafka running ran: {DateTimeOffset.Now} - {kafkaResult}");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"Customer Kafka running failed: {DateTimeOffset.Now} - {ex.Message} - {kafkaResult}");
+                    await Task.Delay(1000, stoppingToken);
+                }
+                if (count > 100)
+                {
+                    throw new KafkaMessageException($"Kafka message failed after 100 tries - last error {kafkaResult}");
+                }
+            }
+        }
 
     }
 }

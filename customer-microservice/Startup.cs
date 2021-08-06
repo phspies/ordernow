@@ -23,6 +23,8 @@ using System.Text;
 using Common.Kafka;
 using Common.Kafka.Consumer;
 using customer_microservice.Kafka;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Linq;
 
 namespace customer_microservice
 {
@@ -34,6 +36,7 @@ namespace customer_microservice
         {
             Configuration = configuration;
         }
+
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
@@ -51,6 +54,8 @@ namespace customer_microservice
                 }));
 
             ILogger<Program> logger = loggerFactory.CreateLogger<Program>();
+
+            
 
             //if kafka is configured
             var test = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP");
@@ -158,6 +163,7 @@ namespace customer_microservice
                 {
                     c.SwaggerDoc("v1", new OpenApiInfo { Title = "CustomerMicroservice", Version = "v1" });
                 });
+                services.AddSwaggerGenNewtonsoftSupport();
 
 
             }
@@ -168,6 +174,7 @@ namespace customer_microservice
         {
 
             CreateDbIfNotExists(host);
+
             //Global error handling
             app.UseExceptionHandler(a => a.Run(async context =>
             {
@@ -208,14 +215,33 @@ namespace customer_microservice
                 try
                 {
                     var context = services.GetRequiredService<DBContext>();
-                    context.Database.EnsureCreated();
-                    context.Database.Migrate();
+                    if (!context.Exists())
+                    {
+                        Console.WriteLine($"Creating database");
+                        context.Database.EnsureCreated();
+                    }
+                    else
+                    {
+                        foreach (string migration in context.Database.GetPendingMigrations())
+                        {
+                            Console.WriteLine($"{migration} migration pending");
+                        }
+                        if (context.Database.GetPendingMigrations().ToList().Any())
+                        {
+                            Console.WriteLine($"Applying database migrations");
+                            context.Database.MigrateAsync();
+                        }
+                        else
+                        {
+                            Console.WriteLine($"No database migrations required");
+                        }
+                    }
+
                     //DbInitializer.Initialize(context);
                 }
                 catch (Exception ex)
                 {
-                    var logger = services.GetRequiredService<ILogger<Program>>();
-                    logger.LogError(ex, "An error occurred creating the DB.");
+                    Console.WriteLine($"An error occurred creating the DB: {ex.Message}");
                 }
             }
         }

@@ -25,6 +25,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="5.0.8" />
     <PackageReference Include="MediatR" Version="9.0.0" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="6.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="6.1.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,9 +38,12 @@
     <None Remove="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
     <None Remove="MediatR" />
     <None Remove="MediatR.Extensions.Microsoft.DependencyInjection" />
+    <None Remove="Swashbuckle.AspNetCore.Newtonsoft" />
+    <None Remove="Kafka\" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Datamodels\" />
     <Folder Include="Utilities\" />
+    <Folder Include="Kafka\" />
   </ItemGroup>
 </Project>
